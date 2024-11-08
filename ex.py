@@ -158,20 +158,24 @@ def count_popups(soup):
     # Custom function to count possible popups
     return len(soup.find_all('script', src=lambda x: x and 'popup' in x))
 
-# Loading the encoder 
-one_hot_encoder = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/encoder.joblib')
 
-# Loading the outlier removal joblib file
+# 2 Loading the outlier removal joblib file
 outlier_removal_params = joblib.load(r"C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/data_outliers.joblib")
+DL = outlier_removal_params['outlier_info']
+outlier_df = pd.DataFrame.from_dict(DL, orient='index')
 
-# Loading the Scaler joblib file
+
+# 3 Loading the encoder 
+#one_hot_encoder = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/encoder.joblib')
+
+# 4 Loading the Scaler joblib file
 scaler = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/scaler.joblib')
 
-# loading the pca transformer 
+# 5 loading the pca transformer 
 pca = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/pca.joblib')
 
 
-# Loading agglomerative clustering model 
+# 6 Loading agglomerative clustering model 
 agg_model_data = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/agg_clustering_model_with_labels.joblib')
 
 
@@ -185,5 +189,27 @@ agg_clustering = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
 
 def predict(url):
     features_df = analyze_url(url)
+
+    for feature in outlier_df.index:
+    lb = outlier_df.loc[feature, 'LB']
+    ub = outlier_df.loc[feature, 'UB']
+    
+    # Apply the logic to remove outliers for each feature
+    features_df[feature] = features_df[feature].apply(lambda x: x if lb <= x <= ub else x)  
+
+    # Scaling the features
+    scaled_feats = scaler.transform(features_df)
+
+    # PCA conversion 
+    pca_df = pca.transform(scaled_feats)
+
+    # Cluster assignment 
+    bgjg
+
+
+
+    
+
+    
 
     
