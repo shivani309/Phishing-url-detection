@@ -10,7 +10,7 @@ import tldextract
 import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-
+import skfuzzy as fuzz
 
 
 
@@ -187,6 +187,9 @@ linkage = agg_model_data['model_params']['linkage']
 #affinity = agg_model_data['model_params']['affinity']
 agg_clustering = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
 
+# Contains datatypes of columns from the original dataset 
+datatypes_df = joblib.load('C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/data_datatypes.joblib')
+
 def predict(url):
     features_df = analyze_url(url)
 
@@ -204,7 +207,7 @@ def predict(url):
     pca_df = pca.transform(scaled_feats)
 
     # Cluster assignment 
-    bgjg
+    agg 
 
 
 
