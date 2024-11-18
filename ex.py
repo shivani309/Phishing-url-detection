@@ -11,7 +11,11 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import skfuzzy as fuzz
-
+import warnings
+# Suppress all warnings
+warnings.filterwarnings('ignore')
+# Suppress specific warning type
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
 
@@ -31,7 +35,7 @@ def analyze_url(url):
     # Parse URL components
     extracted = extractor(url)
     protocol = urlparse(url).scheme  # Get the protocol (http or https)
-    print(protocol)
+    #print(protocol)
     full_domain = protocol + ('.' + extracted.subdomain if extracted.subdomain else '') + '.' + extracted.domain
     
     # 1. Domain Length (excluding protocol)
@@ -121,7 +125,7 @@ def analyze_url(url):
         
     except Exception as e:
         print(f"Error fetching {url}: {e}")
-    
+    #print(features)
     return pd.DataFrame([features])
 
 # Helper functions
@@ -159,8 +163,7 @@ def count_popups(soup):
     return len(soup.find_all('script', src=lambda x: x and 'popup' in x))
 
 
-# 2 Loading the outlier removal joblib file
-outlier_removal_params = joblib.load(r"C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/data_outliers.joblib")
+outlier_removal_params = joblib.load(r"D:/Phishing-url-detection/Clustering/data_outliers.joblib")
 DL = outlier_removal_params['outlier_info']
 outlier_df = pd.DataFrame.from_dict(DL, orient='index')
 
@@ -169,50 +172,106 @@ outlier_df = pd.DataFrame.from_dict(DL, orient='index')
 #one_hot_encoder = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/encoder.joblib')
 
 # 4 Loading the Scaler joblib file
-scaler = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/scaler.joblib')
+scaler = joblib.load(r'D:/Phishing-url-detection/Clustering/scaler.joblib')
 
 # 5 loading the pca transformer 
-pca = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/pca.joblib')
+pca = joblib.load(r'D:/Phishing-url-detection/Clustering/pca.joblib')
 
+# Contains datatypes of original dataset columns 
+datatypes_df = joblib.load('D:/Phishing-url-detection/Clustering/data_datatypes.joblib')
 
-# 6 Loading agglomerative clustering model 
-agg_model_data = joblib.load(r'C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/agg_clustering_model_with_labels.joblib')
+# 6. Fuzzy C Means model 
+fcm = joblib.load('Clustering/fcm_model.joblib')
 
 
 #print(outlier_removal_params)
 
-# Recreate the Agglomerative Clustering model using saved parameters
-n_clusters = agg_model_data['model_params']['n_clusters']
-linkage = agg_model_data['model_params']['linkage']
-#affinity = agg_model_data['model_params']['affinity']
-agg_clustering = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
+# Recreate the Fuzzy CMeans Clustering model using saved parameters
+centroids = fcm['centroids']
+m_value = fcm['m_value']
+n_clusters = fcm['n_clusters']
+error_tolerance = fcm['error_tolerance']
+iterations = fcm['max_iterations']
 
 # Contains datatypes of columns from the original dataset 
-datatypes_df = joblib.load('C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/data_datatypes.joblib')
+#datatypes_df = joblib.load('C:/Users/Sejal Hanmante/OneDrive/Documents/GitHub/Phishing-url-detection/Clustering/data_datatypes.joblib')
+cols_means = joblib.load('D:/Phishing-url-detection/Clustering/column_mean_values.joblib')
+
+url_labels =  pd.read_csv(r'D:\Phishing-url-detection\Clustering\url_label.to_csv')
 
 def predict(url):
-    features_df = analyze_url(url)
+    if url in url_labels['URL'].values:
+        #print(True)
+        # Step 4: Retrieve the label if URL is found
+        label = url_labels[url_labels['URL']==url]['label'].values
+        #label = url_label[url_label['label'] == url]['label'].values  # Assuming 'label' is the column name
+        print(f"The label for the URL {url} is: {label}")
+        predicted_labels = label 
+    else:
+        
+        features_df = analyze_url(url)
+        print("before",features_df)
+        for j in datatypes_df.index:
+            #print(j)
+            if j not in features_df.columns:
+                for j in cols_means.keys():
+                #print(j)
+                # If a feature is missing, fill it with a default value (e.g., 0)
+                    features_df[j] = cols_means[j]  # You can also use np.nan if preferred
+        print("after",features_df)
+        # Reorder the columns to match the order of features when the scaler was trained
+        features_df = features_df[datatypes_df.index]
 
-    for feature in outlier_df.index:
-    lb = outlier_df.loc[feature, 'LB']
-    ub = outlier_df.loc[feature, 'UB']
+        for feature in outlier_df.index:
+            lb = outlier_df.loc[feature, 'LB']
+            ub = outlier_df.loc[feature, 'UB']
+        
+        # Apply the logic to remove outliers for each feature
+            features_df[feature] = features_df[feature].apply(lambda x: x if lb <= x <= ub else x)  
+        
+        # Converting columns to datatypes as present in original dataset
+        for i in features_df.columns :
+            j=features_df[i].dtype
+            if j != datatypes_df[i]:
+            #print(i,j)
+                features_df[i] = features_df[i].astype(datatypes_df[i])
+
+        # Scaling the features
+        scaled_feats = scaler.transform(features_df)
+
+        # PCA conversion 
+        pca_df = pca.transform(scaled_feats).reshape(-1,1)
+
+        
+        #print("Shape of pca_df:", pca_df.shape)
+        #print("Shape of centroids:", centroids.shape)
+        
+        # Cluster assignment 
+        u, d, jm, p, fpc ,cntr= fuzz.cluster.cmeans_predict(
+            pca_df, centroids, m_value, error=error_tolerance, maxiter=iterations,init=None)
+        
+        # Now, 'u' contains the membership matrix
+        print("Membership matrix for the new data point:", u)
+
+        # Assign cluster with the highest membership
+        predicted_labels = np.argmax(u, axis=0)
+
+        print(predicted_labels)
+
+    if predicted_labels[0] == 0:
+        result = 'Legitimate'
+    else :
+        result = 'Phishing'
+   
     
-    # Apply the logic to remove outliers for each feature
-    features_df[feature] = features_df[feature].apply(lambda x: x if lb <= x <= ub else x)  
-
-    # Scaling the features
-    scaled_feats = scaler.transform(features_df)
-
-    # PCA conversion 
-    pca_df = pca.transform(scaled_feats)
-
-    # Cluster assignment 
-    agg 
+    return result
 
 
+if __name__ == '__main__':
+    url = str(input('Enter the url : '))
+    result =predict(url)
+    print(result)
 
     
 
-    
-
-    
+#hgd
