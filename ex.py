@@ -17,7 +17,11 @@ warnings.filterwarnings('ignore')
 # Suppress specific warning type
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
+app = Flask(__name__)
+CORS(app)
 
 def remove_outliers(data, params):
     for column, stats in params.items():
@@ -266,12 +270,35 @@ def predict(url):
     
     return result
 
+@app.route('/predictPhishing', methods=['POST'])
+def predict_result():
+    respCode = 1
+    data = request.get_json()
+    print(data)
+
+    url = data.get('url')
+    result =predict(url)
+    if(result == "Legitimate"):
+        respCode = 0
+
+    response_message = {
+        "url" : url,
+        "respCode": respCode
+    }
+
+    return jsonify(response_message), 200
+
+@app.route('/pitchUs', methods=['POST'])
+def submit_data():
+    data = request.get_json()
+
+    name = data.get('name')
+    email = data.get('email')
+
+    response_message = f"Received data: Name = {name}, Email = {email}"
+    response = {"message": response_message}
+
+    return jsonify(response), 200
 
 if __name__ == '__main__':
-    url = str(input('Enter the url : '))
-    result =predict(url)
-    print(result)
-
-    
-
-#hgd
+    app.run(debug=True)
